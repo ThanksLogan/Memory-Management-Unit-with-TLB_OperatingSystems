@@ -12,9 +12,9 @@
 class Level {
 public:
     int currentDepth;
-    PageTable * PageTablePtr;
+    PageTable *PageTablePtr;
     union MvL {
-        Level * NextLevelPtr[NUMBEROF_NEXTLEVELS] = {};
+        Level *NextLevelPtr[NUMBEROF_NEXTLEVELS] = {};
         map<unsigned int, unsigned int> map[NUMBEROF_NEXTLEVELS] = {};
     };
     void insert_vpn2pfn(Level *levelPtr, unsigned int address, unsigned int frame){
