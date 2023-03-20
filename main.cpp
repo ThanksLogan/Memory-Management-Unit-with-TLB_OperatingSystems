@@ -4,6 +4,7 @@
 #include <getopt.h>
 #include <fstream>
 #include "TLB.h"
+#include "pagetable.h"
 #include <cwchar>
 extern "C" {
 #include "vaddr_tracereader.h"
@@ -74,26 +75,41 @@ int main(int argc, char **argv) {
     unsigned int vaddr;
     unsigned int offMask = 0x00000FFF;
     unsigned int virtualMask = 0xFFFFF000;
-    unsigned int fakePFN = 0;
     unsigned int offset;
-    unsigned int lookup;
+    unsigned int VPN;
+    unsigned int PA;
+    Map *currentMapping;
+    pageTable *rootPT = new pageTable();
+    unsigned int bitmasks[] = {0xF0000, 0x0F000, 0x00FF};
+    unsigned int shifts[] = {16, 12, 8};
+    unsigned int entryC[] = {256, 256, 4096};
+    unsigned int levelC = 3;
+    rootPT->bitmaskAry = bitmasks;
+    rootPT->shiftAry = shifts;
+    rootPT->entryCount = entryC;
+    rootPT->levelCount = levelC;
+    rootPT->rootNodePtr = new level(0);
+    rootPT->rootNodePtr->pageTablePtr = rootPT;
     if(processTil == -1) {
         while(NextAddress(trace, &mtrace)) {
+            frameNumber++;
             vaddr = mtrace.addr;
             offset = vaddr & offMask;
-            lookup = (vaddr & virtualMask) >> 12;
-            std::cout << "offset: " << std::hex << offset << std::endl;
-            std::cout << "lookup/VA: " << std::hex << lookup << std::endl;
-            if (cache->cache.find(lookup) != cache->cache.end()) {
+            VPN = vaddr >> 12;
+            if(cache->cache.find(VPN) != cache->cache.end()){
                 cache->addressTime++;
-                std::cout << "hit" << std::endl;
-                std::cout << cache->cache[lookup] << std::endl;
-                cache->times[lookup] = cache->addressTime;
+                PA = cache->cache[VPN] + offset;
+                std::cout << "PA cache: " << std::hex << PA << std::endl;
             }else{
-                cache->addEntry(lookup, fakePFN);
+                currentMapping = rootPT->lookup_vpn2pfn(VPN);
+                if(currentMapping != NULL){
+                    cache->addEntry(VPN, currentMapping->PFN);
+                    std::cout << "PA page: " << std::hex << currentMapping->PFN + offset << std::endl;
+                }else{
+                    rootPT->insert_vpn2pfn(VPN, frameNumber);
+                    std::cout << "PA inserted: " << std::hex << frameNumber + offset << std::endl;
+                }
             }
-            fakePFN++;
-            std::cout << fakePFN << std::endl;
         }
     }else{
         while(NextAddress(trace, &mtrace) && readAddressCount < processTil) {
@@ -101,6 +117,5 @@ int main(int argc, char **argv) {
             readAddressCount++;
         }
     }
-    std::cout << cache->cache[0x1704] << std::endl;
 
 }
