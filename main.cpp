@@ -25,7 +25,7 @@ int main(int argc, char **argv) {
     /* TLB cache capacity */
     int cacheCap = 4;
     /* print mode, int for easy switch statement */
-    int printMode = 2;
+    int printMode = 4;
     int readAddressCount = 0;
     int frameNumber = 0;
     unsigned int cacheHits = 0;
@@ -65,7 +65,7 @@ int main(int argc, char **argv) {
                     printMode = 2;
                 }else if(!strcmp(mode, "va2pa_tlb_ptwalk")){
                     printMode = 3;
-                }else if(!strcmp(mode, "vpn2pfn")){
+                }else if(!strcmp(mode, "virtualA2pfn")){
                     printMode = 4;
                 }else if(!strcmp(mode, "offset")){
                     printMode = 5;
@@ -95,7 +95,7 @@ int main(int argc, char **argv) {
     std::vector<unsigned int> shifts;
     std::vector<unsigned int> entries;
     /* test vector */
-    levelVec = {20};
+    levelVec = {4, 6, 8};
     /* sums up vector for use in shifting, (32-sum) is length of offset */
     int sum = std::accumulate(levelVec.begin(), levelVec.end(), 0);
     int off = TOTALBITS-sum;
@@ -122,8 +122,11 @@ int main(int argc, char **argv) {
     unsigned int virtualMask = (int(pow(2, TOTALBITS-off))-1) << off;
 
     unsigned int offset;
-    unsigned int VPN;
+    unsigned int virtualA;
     unsigned int PA;
+    unsigned int currentFrame;
+    bool tlbhit = false;
+    bool pghit = false;
     Map *currentMapping;
     pageTable *rootPT = new pageTable();
     /* level count is the length of the bit arguments */
@@ -146,38 +149,61 @@ int main(int argc, char **argv) {
             addresses++;
             vaddr = mtrace.addr;
             offset = vaddr & offMask;
-            VPN = (vaddr & virtualMask);
-            /* checks if VPN in cache's map */
-            if(cache->cache.find(VPN) != cache->cache.end()){
+            virtualA = (vaddr & virtualMask);
+            /* checks if virtualA in cache's map */
+            if(cache->cache.find(virtualA) != cache->cache.end()){
                 /* new hit, increment addressTime to track */
                 cache->addressTime++;
                 cacheHits++;
                 /*update entry's time */
-                cache->times[VPN] = cache->addressTime;
+                cache->times[virtualA] = cache->addressTime;
+                tlbhit = true;
                 /* find PA based on cache's return */
-                PA = (cache->cache[VPN] << off) | offset;
+                currentFrame = cache->cache[virtualA];
+                PA = (cache->cache[virtualA] << off) | offset;
             }else{
-                currentMapping = rootPT->lookup_vpn2pfn(VPN);
+                currentMapping = rootPT->lookup_vpn2pfn(virtualA);
                 /* if found in PG */
                 if(currentMapping != NULL) {
                     pageHits++;
+                    pghit = true;
                     /* add to cache */
                     if (cacheCap > 0) {
-                        cache->addEntry(VPN, currentMapping->PFN);
+                        cache->addEntry(virtualA, currentMapping->PFN);
                     }
+                    currentFrame = currentMapping->PFN;
                     PA = (currentMapping->PFN << off) | offset;
                 }else{
                     /* not found anywhere, insert into page table */
-                    rootPT->insert_vpn2pfn(VPN, frameNumber);
+                    rootPT->insert_vpn2pfn(virtualA, frameNumber);
+                    cache->addEntry(virtualA, frameNumber);
+                    currentFrame = frameNumber;
                     PA = (frameNumber << off) | offset;
                     /* new frame needed */
                     frameNumber++;
                 }
             }
-            if(printMode == 2) {
-                std::cout << frameNumber << std::endl;
-                report_virtualAddr2physicalAddr(vaddr, PA);
+            switch(printMode){
+                case 2:
+                    report_virtualAddr2physicalAddr(vaddr, PA);
+                    break;
+                case 3:
+                    report_va2pa_TLB_PTwalk(vaddr, PA, tlbhit, pghit);
+                    break;
+                case 4: {
+                    std::vector<unsigned int> pages;
+                    for (int i = 0; i < levelVec.size(); i++) {
+                        pages.push_back((virtualA & bitmasks[i]) >> shifts[i]);
+                    }
+                    unsigned int *passedP = &pages[0];
+                    report_pagetable_map(levelC, passedP, currentFrame);
+                    break;
+                }
+                default:
+                    break;
             }
+            tlbhit = false;
+            pghit = false;
         }
     }else{
         while(NextAddress(trace, &mtrace) && readAddressCount < processTil) {
