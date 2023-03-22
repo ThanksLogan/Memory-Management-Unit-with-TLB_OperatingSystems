@@ -5,6 +5,7 @@
 #ifndef AS32_PAGETABLE_H
 #define AS32_PAGETABLE_H
 #include <map>
+#include <vector>
 
 
 class pageTable;
@@ -35,9 +36,9 @@ public:
 class pageTable{
 public:
     unsigned int levelCount;
-    unsigned int *shiftAry;
-    unsigned int *entryCount;
-    unsigned int *bitmaskAry;
+    std::vector<unsigned int> shiftAry;
+    std::vector<unsigned int> entryCount;
+    std::vector<unsigned int> bitmaskAry;
     level *rootNodePtr;
     void insert_vpn2pfn(unsigned int address, unsigned int frame);
     Map* lookup_vpn2pfn(unsigned int virtualAddress);

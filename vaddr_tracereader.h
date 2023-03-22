@@ -9,6 +9,7 @@
 #else
 /* C includes */
 #include <inttypes.h>
+#include <stdio.h>
 #endif 
 
 
