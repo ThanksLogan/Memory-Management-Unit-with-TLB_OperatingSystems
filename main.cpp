@@ -12,6 +12,7 @@
 
 extern "C" {
 #include "vaddr_tracereader.h"
+#include "print_helpers.h"
 }
 
 #define BADFLAG 2
@@ -22,9 +23,9 @@ int main(int argc, char **argv) {
     /* process first N number of addresses given in trace file */
     int processTil = -1;
     /* TLB cache capacity */
-    int cacheCap = 0;
+    int cacheCap = 4;
     /* print mode, int for easy switch statement */
-    int printMode = 0;
+    int printMode = 2;
     int readAddressCount = 0;
     int frameNumber = 0;
     unsigned int cacheHits = 0;
@@ -94,22 +95,22 @@ int main(int argc, char **argv) {
     std::vector<unsigned int> shifts;
     std::vector<unsigned int> entries;
     /* test vector */
-    levelVec = {8, 4, 8};
+    levelVec = {20};
     /* sums up vector for use in shifting, (32-sum) is length of offset */
     int sum = std::accumulate(levelVec.begin(), levelVec.end(), 0);
     int off = TOTALBITS-sum;
     for(int i = 0; i < levelVec.size(); i++){
         /* takes sum and subtracts current level for shifting for bit masks */
         sum -= levelVec[i];
-        /* shifts 2^levelVec[i]-1 to the left by remaining sum to get mask, FF -> FF000 for level 1 */
-        bitmasks.push_back(int(pow(2,levelVec[i]))-1 << sum);
-        /* adds remaining sum to shifts, to shift back when traversing page table */
-        shifts.push_back(sum);
+        /* shifts 2^levelVec[i]-1 to the left by remaining sum+off to get mask, FF -> FF000 for level 1 */
+        bitmasks.push_back(int(pow(2,levelVec[i]))-1 << (sum+off));
+        /* adds remaining sum+off to shifts, to shift back when traversing page table */
+        shifts.push_back(sum+off);
         /* adds 2^(level[i]) for allocation of data structure at each level */
         entries.push_back(int(pow(2, levelVec[i])));
     }
     /* creates a new TLB cache given capacity */
-    tlbCache *cache = new tlbCache(8);
+    tlbCache *cache = new tlbCache(cacheCap);
 
     p2AddrTr mtrace;
 
@@ -135,13 +136,17 @@ int main(int argc, char **argv) {
     rootPT->rootNodePtr = new level(0);
     /* sets the level's pgtpointer back to rootPT */
     rootPT->rootNodePtr->pageTablePtr = rootPT;
+    if(printMode == 1) {
+        unsigned int *masks = &bitmasks[0];
+        report_levelbitmasks(levelC, masks);
+    }
     /* processTil not triggered, process till the end of file */
     if(processTil == -1) {
         while(NextAddress(trace, &mtrace)) {
             addresses++;
             vaddr = mtrace.addr;
             offset = vaddr & offMask;
-            VPN = (vaddr & virtualMask) >> off;
+            VPN = (vaddr & virtualMask);
             /* checks if VPN in cache's map */
             if(cache->cache.find(VPN) != cache->cache.end()){
                 /* new hit, increment addressTime to track */
@@ -150,23 +155,28 @@ int main(int argc, char **argv) {
                 /*update entry's time */
                 cache->times[VPN] = cache->addressTime;
                 /* find PA based on cache's return */
-                PA = cache->cache[VPN] + offset;
-                std::cout << "PA cache: " << std::hex << PA << std::endl;
+                PA = (cache->cache[VPN] << off) | offset;
             }else{
                 currentMapping = rootPT->lookup_vpn2pfn(VPN);
                 /* if found in PG */
-                if(currentMapping != NULL){
+                if(currentMapping != NULL) {
                     pageHits++;
                     /* add to cache */
-                    cache->addEntry(VPN, currentMapping->PFN);
-                    std::cout << "PA page: " << std::hex << currentMapping->PFN + offset << std::endl;
+                    if (cacheCap > 0) {
+                        cache->addEntry(VPN, currentMapping->PFN);
+                    }
+                    PA = (currentMapping->PFN << off) | offset;
                 }else{
                     /* not found anywhere, insert into page table */
                     rootPT->insert_vpn2pfn(VPN, frameNumber);
-                    std::cout << "PA inserted: " << std::hex << frameNumber + offset << std::endl;
+                    PA = (frameNumber << off) | offset;
                     /* new frame needed */
                     frameNumber++;
                 }
+            }
+            if(printMode == 2) {
+                std::cout << frameNumber << std::endl;
+                report_virtualAddr2physicalAddr(vaddr, PA);
             }
         }
     }else{
