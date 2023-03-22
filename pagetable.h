@@ -6,14 +6,13 @@
 #define AS32_PAGETABLE_H
 #include <map>
 
-#define NUMBEROF_LEVELS 256
-#define MAPPINGS 4096
 
 class pageTable;
 
 class Map{
 public:
     unsigned int PFN;
+    Map();
     Map(unsigned int PN){
         PFN = PN;
     }
@@ -22,9 +21,10 @@ public:
 class level{
 public:
     unsigned int depth;
-    level *nextLevelPtr[NUMBEROF_LEVELS] = {};
+    level **nextLevelPtr = NULL;
     pageTable *pageTablePtr;
-    Map *mappings[MAPPINGS] = {};
+    Map **mappings = NULL;
+    level();
     level(int dep){
         depth = dep;
     }

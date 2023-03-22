@@ -22,6 +22,9 @@ int main(int argc, char **argv) {
     int printMode = 0;
     int readAddressCount = 0;
     int frameNumber = 0;
+    unsigned int cacheHits = 0;
+    unsigned int pageHits = 0;
+    unsigned int addresses = 0;
     tlbCache *cache = new tlbCache(8);
 
 
@@ -80,9 +83,9 @@ int main(int argc, char **argv) {
     unsigned int PA;
     Map *currentMapping;
     pageTable *rootPT = new pageTable();
-    unsigned int bitmasks[] = {0xF0000, 0x0F000, 0x00FF};
+    unsigned int bitmasks[] = {0xFF000, 0x00F00, 0x000FF};
     unsigned int shifts[] = {16, 12, 8};
-    unsigned int entryC[] = {256, 256, 4096};
+    unsigned int entryC[] = {256, 16, 256};
     unsigned int levelC = 3;
     rootPT->bitmaskAry = bitmasks;
     rootPT->shiftAry = shifts;
@@ -92,17 +95,21 @@ int main(int argc, char **argv) {
     rootPT->rootNodePtr->pageTablePtr = rootPT;
     if(processTil == -1) {
         while(NextAddress(trace, &mtrace)) {
+            addresses++;
             frameNumber++;
             vaddr = mtrace.addr;
             offset = vaddr & offMask;
             VPN = vaddr >> 12;
             if(cache->cache.find(VPN) != cache->cache.end()){
                 cache->addressTime++;
+                cacheHits++;
+                cache->times[VPN] = cache->addressTime;
                 PA = cache->cache[VPN] + offset;
                 std::cout << "PA cache: " << std::hex << PA << std::endl;
             }else{
                 currentMapping = rootPT->lookup_vpn2pfn(VPN);
                 if(currentMapping != NULL){
+                    pageHits++;
                     cache->addEntry(VPN, currentMapping->PFN);
                     std::cout << "PA page: " << std::hex << currentMapping->PFN + offset << std::endl;
                 }else{
