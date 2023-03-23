@@ -1,6 +1,7 @@
-//
-// Created by shane on 3/19/2023.
-//
+/* Names: Shane Wechsler, Logan Foreman
+ * REDIDS: 823526399,
+ * CS 480 Assignment 3
+ * pagetable header file */
 
 #ifndef AS32_PAGETABLE_H
 #define AS32_PAGETABLE_H
@@ -12,7 +13,7 @@ class pageTable;
 
 class Map{
 public:
-    //used in an array of 2^(level) entries, as a hash map */
+    /* used in an array of 2^(level) entries, as a hash map */
     /* PFN mapping from index */
     unsigned int PFN;
     Map(unsigned int PN){
@@ -36,12 +37,14 @@ public:
     void insert_vpn2pfn(unsigned int address, unsigned int frame);
     /* attempts to find address->frame mapping in pagetable, using levels specifically */
     Map* lookup_vpn2pfn(unsigned int virtualAddress);
-
+    unsigned int virtualAddressToVPN(unsigned int virtualAddress, unsigned int mask, unsigned int shift);
 };
 class pageTable{
 public:
     /* total amount of levels in tree */
     unsigned int levelCount;
+    /* byte count used by pagetable */
+    unsigned int byteCount;
     /* dynamic array of shifts needed at each level of tree */
     std::vector<unsigned int> shiftAry;
     /* dynamic array of entries needed at each level */
@@ -54,6 +57,7 @@ public:
     void insert_vpn2pfn(unsigned int address, unsigned int frame);
     /* find mapping in PT */
     Map* lookup_vpn2pfn(unsigned int virtualAddress);
+    /* converts VA to a VPN based on masks and shifts */
     unsigned int virtualAddressToVPN(unsigned int virtualAddress, unsigned int mask, unsigned int shift);
 
 };

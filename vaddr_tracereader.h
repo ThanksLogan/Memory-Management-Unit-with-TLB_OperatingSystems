@@ -6,6 +6,7 @@
 #ifdef __cplusplus
 /* C++ includes */
 #include <stdint.h>
+#include <cstdio>
 #else
 /* C includes */
 #include <inttypes.h>

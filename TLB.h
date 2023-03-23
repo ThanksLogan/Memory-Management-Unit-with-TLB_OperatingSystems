@@ -1,7 +1,7 @@
-//
-// Created by shane on 3/16/2023.
-//
-
+/* Names: Shane Wechsler, Logan Foreman
+ * REDIDS: 823526399,
+ * CS 480 Assignment 3
+ * TLB header file */
 #ifndef AS32_TLB_H
 #define AS32_TLB_H
 
@@ -15,7 +15,7 @@ class tlbCache {
 public:
     /* size of cache */
     unsigned int size;
-    /* address time to implement a LRU algorithm, updated with every insert and access */
+    /* address time to implement an LRU algorithm, updated with every insert and access */
     unsigned int addressTime;
     /* frame counter to track fill */
     unsigned int frames;

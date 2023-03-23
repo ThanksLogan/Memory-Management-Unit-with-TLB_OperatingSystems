@@ -1,8 +1,11 @@
-//
-// Created by shane on 3/19/2023.
-//
+/* Names: Shane Wechsler, Logan Foreman
+ * REDIDS: 823526399,
+ * CS 480 Assignment 3
+ * pagetable implementation */
 
 #include <map>
+#include <cmath>
+#include <iostream>
 #include "pagetable.h"
 
 void level::insert_vpn2pfn(unsigned int address, unsigned int frame) {
@@ -13,6 +16,8 @@ void level::insert_vpn2pfn(unsigned int address, unsigned int frame) {
         /* check if mappings has been initialized, init if not */
         if(this->mappings == NULL){
             this->mappings = new Map*[this->pageTablePtr->entryCount[this->depth]]{};
+            /* increases byte count by number of entries instantiated*size of class */
+            this->pageTablePtr->byteCount += this->pageTablePtr->entryCount[this->depth] * sizeof(Map);
         }
         /* assign index to frame number */
         this->mappings[index] = new Map(frame);
@@ -20,6 +25,8 @@ void level::insert_vpn2pfn(unsigned int address, unsigned int frame) {
         /* check if nextLevelPointer instantiated */
         if(this->nextLevelPtr == NULL){
             this->nextLevelPtr = new level*[this->pageTablePtr->entryCount[this->depth]]{};
+            /* increases byte count by number of entries instantiated*size of class */
+            this->pageTablePtr->byteCount += this->pageTablePtr->entryCount[this->depth] * sizeof(level);
         }
         /* sees if given entry has been assigned already, if not, make a new level there, with current depth + 1 */
         if(this->nextLevelPtr[index] == NULL) {
@@ -62,4 +69,8 @@ void pageTable::insert_vpn2pfn(unsigned int address, unsigned int frame) {
 
 Map* pageTable::lookup_vpn2pfn(unsigned int virtualAddress) {
     return this->rootNodePtr->lookup_vpn2pfn(virtualAddress);
+}
+
+unsigned int pageTable::virtualAddressToVPN(unsigned int virtualAddress, unsigned int mask, unsigned int shift) {
+    return (virtualAddress & mask) >> shift;
 }

@@ -1,3 +1,9 @@
+/* Names: Shane Wechsler, Logan Foreman
+ * REDIDS: 823526399,
+ * CS 480 Assignment 3
+ * Main */
+
+
 #include <iostream>
 #include <string.h>
 #include <cstdio>
@@ -9,32 +15,40 @@
 #include "pagetable.h"
 #include <cwchar>
 #include <math.h>
+#include <climits>
 
-extern "C" {
 #include "vaddr_tracereader.h"
 #include "print_helpers.h"
-}
+
 
 #define BADFLAG 2
 #define BADPATH 3
+#define BADARG 4
 
 #define TOTALBITS 32
 int main(int argc, char **argv) {
     /* process first N number of addresses given in trace file */
-    int processTil = -1;
+    int processTil = INT_MAX;
     /* TLB cache capacity */
-    int cacheCap = 4;
-    /* print mode, int for easy switch statement */
-    int printMode = 4;
-    int readAddressCount = 0;
+    int cacheCap = 0;
+    /* frame number being to be inserted */
     int frameNumber = 0;
     unsigned int cacheHits = 0;
     unsigned int pageHits = 0;
+    /* number of addresses read in */
     unsigned int addresses = 0;
     int idx;
     /* records the amount of bits in each level, based on arguments */
     std::vector<int> levelVec = {};
 
+    /* instantiation of output print type */
+    OutputOptionsType output;
+    output.summary = true;
+    output.vpn2pfn = false;
+    output.offset = false;
+    output.levelbitmasks = false;
+    output.va2pa = false;
+    output.va2pa_tlb_ptwalk = false;
 
     /* opens and error checks file */
     FILE *trace;
@@ -60,17 +74,28 @@ int main(int argc, char **argv) {
             case 'p': {
                 const char *mode = optarg;
                 if(!strcmp(mode, "levelbitmasks")){
-                    printMode = 1;
+                    output.levelbitmasks = true;
+                    output.summary = false;
+                    //printMode = 1;
                 }else if(!strcmp(mode, "va2pa")){
-                    printMode = 2;
+                    output.va2pa = true;
+                    output.summary = false;
+                    //printMode = 2;
                 }else if(!strcmp(mode, "va2pa_tlb_ptwalk")){
-                    printMode = 3;
-                }else if(!strcmp(mode, "virtualA2pfn")){
-                    printMode = 4;
+                    output.va2pa_tlb_ptwalk = true;
+                    output.summary = false;
+                    //printMode = 3;
+                }else if(!strcmp(mode, "vpn2pfn")){
+                    output.vpn2pfn = true;
+                    output.summary = false;
+                    //printMode = 4;
                 }else if(!strcmp(mode, "offset")){
-                    printMode = 5;
+                    output.offset = true;
+                    output.summary = false;
+                    //printMode = 5;
                 }else if(!strcmp(mode, "summary")){
-                    printMode = 0;
+                    output.summary = true;
+                    //printMode = 0;
                 }else{
                     std::cout << "Incorrect print mode argument, look at list!" << std::endl;
                     exit(BADFLAG);
@@ -85,19 +110,34 @@ int main(int argc, char **argv) {
     idx = optind;
     /* reads in trace file */
     trace = fopen(argv[idx], "r");
+    if(trace == NULL){
+        std::cout << "Unable to open<<" << argv[idx] << ">>" << std::endl;
+        exit(BADPATH);
+    }
     idx++;
+    /* number of levels in PGT */
+    unsigned int levelC = 0;
     while(idx < argc){
         /* pushes bit counts to vector */
-        levelVec.push_back(atoi(argv[idx]));
+        if(atoi(argv[idx]) < 1){
+            std::cout << "Level " << levelC << " page table must be at least 1 bit" << std::endl;
+            exit(BADARG);
+        }else {
+            levelVec.push_back(atoi(argv[idx]));
+        }
+        levelC++;
         idx++;
     }
     std::vector<unsigned int> bitmasks;
     std::vector<unsigned int> shifts;
     std::vector<unsigned int> entries;
     /* test vector */
-    levelVec = {4, 6, 8};
     /* sums up vector for use in shifting, (32-sum) is length of offset */
     int sum = std::accumulate(levelVec.begin(), levelVec.end(), 0);
+    if(sum > 28){
+        std::cout << "Too many bits used in page tables" << std::endl;
+        exit(BADARG);
+    }
     int off = TOTALBITS-sum;
     for(int i = 0; i < levelVec.size(); i++){
         /* takes sum and subtracts current level for shifting for bit masks */
@@ -129,87 +169,88 @@ int main(int argc, char **argv) {
     bool pghit = false;
     Map *currentMapping;
     pageTable *rootPT = new pageTable();
-    /* level count is the length of the bit arguments */
-    unsigned int levelC = levelVec.size();
     rootPT->bitmaskAry = bitmasks;
     rootPT->shiftAry = shifts;
     rootPT->entryCount = entries;
     rootPT->levelCount = levelC;
+    /* includes root level in byte count */
+    rootPT->byteCount = sizeof(level);
     /*initializes the rootNodePtr to a level with depth 0 */
     rootPT->rootNodePtr = new level(0);
     /* sets the level's pgtpointer back to rootPT */
     rootPT->rootNodePtr->pageTablePtr = rootPT;
-    if(printMode == 1) {
+    if(output.levelbitmasks) {
+        /* converts vector to unsigned int array */
         unsigned int *masks = &bitmasks[0];
         report_levelbitmasks(levelC, masks);
     }
-    /* processTil not triggered, process till the end of file */
-    if(processTil == -1) {
-        while(NextAddress(trace, &mtrace)) {
-            addresses++;
-            vaddr = mtrace.addr;
-            offset = vaddr & offMask;
-            virtualA = (vaddr & virtualMask);
-            /* checks if virtualA in cache's map */
-            if(cache->cache.find(virtualA) != cache->cache.end()){
-                /* new hit, increment addressTime to track */
-                cache->addressTime++;
-                cacheHits++;
-                /*update entry's time */
-                cache->times[virtualA] = cache->addressTime;
-                tlbhit = true;
-                /* find PA based on cache's return */
-                currentFrame = cache->cache[virtualA];
-                PA = (cache->cache[virtualA] << off) | offset;
+    /* process till the end of file, or till processTil hit, processTil initiated to max int values by default */
+    while(NextAddress(trace, &mtrace) && addresses < processTil) {
+        addresses++;
+        vaddr = mtrace.addr;
+        offset = vaddr & offMask;
+        virtualA = (vaddr & virtualMask);
+        /* checks if virtualA in cache's map */
+        if(cache->cache.find(virtualA) != cache->cache.end()){
+            /* new hit, increment addressTime to track */
+            cache->addressTime++;
+            cacheHits++;
+            /*update entry's time */
+            cache->times[virtualA] = cache->addressTime;
+            tlbhit = true;
+            /* find PA based on cache's return */
+            currentFrame = cache->cache[virtualA];
+            PA = (cache->cache[virtualA] << off) | offset;
+        }else{
+            currentMapping = rootPT->lookup_vpn2pfn(virtualA);
+            /* if found in PGT */
+            if(currentMapping != NULL) {
+                pageHits++;
+                pghit = true;
+                /* add to cache */
+                if (cacheCap > 0) {
+                    cache->addEntry(virtualA, currentMapping->PFN);
+                }
+                /* set currentFrame to found map's PFN */
+                currentFrame = currentMapping->PFN;
+                PA = (currentMapping->PFN << off) | offset;
             }else{
-                currentMapping = rootPT->lookup_vpn2pfn(virtualA);
-                /* if found in PG */
-                if(currentMapping != NULL) {
-                    pageHits++;
-                    pghit = true;
-                    /* add to cache */
-                    if (cacheCap > 0) {
-                        cache->addEntry(virtualA, currentMapping->PFN);
-                    }
-                    currentFrame = currentMapping->PFN;
-                    PA = (currentMapping->PFN << off) | offset;
-                }else{
-                    /* not found anywhere, insert into page table */
-                    rootPT->insert_vpn2pfn(virtualA, frameNumber);
+                /* not found anywhere, insert into page table and/or cache */
+                rootPT->insert_vpn2pfn(virtualA, frameNumber);
+                if(cacheCap > 0) {
                     cache->addEntry(virtualA, frameNumber);
-                    currentFrame = frameNumber;
-                    PA = (frameNumber << off) | offset;
-                    /* new frame needed */
-                    frameNumber++;
                 }
+                currentFrame = frameNumber;
+                PA = (frameNumber << off) | offset;
+                /* new frame needed */
+                frameNumber++;
             }
-            switch(printMode){
-                case 2:
-                    report_virtualAddr2physicalAddr(vaddr, PA);
-                    break;
-                case 3:
-                    report_va2pa_TLB_PTwalk(vaddr, PA, tlbhit, pghit);
-                    break;
-                case 4: {
-                    std::vector<unsigned int> pages;
-                    for (int i = 0; i < levelVec.size(); i++) {
-                        pages.push_back((virtualA & bitmasks[i]) >> shifts[i]);
-                    }
-                    unsigned int *passedP = &pages[0];
-                    report_pagetable_map(levelC, passedP, currentFrame);
-                    break;
-                }
-                default:
-                    break;
+        }
+        if(output.offset) {
+            hexnum(offset);
+        }
+        if(output.va2pa) {
+            //std::cout << frameNumber << std::endl;
+            report_virtualAddr2physicalAddr(vaddr, PA);
+        }
+        if(output.va2pa_tlb_ptwalk) {
+            report_va2pa_TLB_PTwalk(vaddr, PA, tlbhit, pghit);
+        }
+        if(output.vpn2pfn) {
+            /* finds VPN at each level for vpn2pfn */
+            unsigned int pages[levelC];
+            for (int i = 0; i < levelC; i++) {
+                pages[i] = rootPT->virtualAddressToVPN(virtualA, bitmasks[i], shifts[i]);
             }
-            tlbhit = false;
-            pghit = false;
+            //unsigned int *passedP = &pages[0];
+            report_pagetable_map(levelC, pages, currentFrame);
         }
-    }else{
-        while(NextAddress(trace, &mtrace) && readAddressCount < processTil) {
-            vaddr = mtrace.addr;
-            readAddressCount++;
-        }
+        /* reset hits */
+        tlbhit = false;
+        pghit = false;
+    }
+    if(output.summary){
+        report_summary(int(pow(2,off)),cacheHits, pageHits, addresses, frameNumber, rootPT->byteCount);
     }
 
 }
