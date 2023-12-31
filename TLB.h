@@ -1,7 +1,4 @@
-/* Names: Shane Wechsler, Logan Foreman
- * REDIDS: 823526399,
- * CS 480 Assignment 3
- * TLB header file */
+ 
 #ifndef AS32_TLB_H
 #define AS32_TLB_H
 

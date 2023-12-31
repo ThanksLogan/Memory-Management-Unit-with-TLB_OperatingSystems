@@ -1,7 +1,4 @@
-/* Names: Shane Wechsler, Logan Foreman
- * REDIDS: 823526399,
- * CS 480 Assignment 3
- * pagetable header file */
+ 
 
 #ifndef AS32_PAGETABLE_H
 #define AS32_PAGETABLE_H

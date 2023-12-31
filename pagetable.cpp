@@ -1,7 +1,4 @@
-/* Names: Shane Wechsler, Logan Foreman
- * REDIDS: 823526399,
- * CS 480 Assignment 3
- * pagetable implementation */
+
 
 #include <map>
 #include <cmath>
